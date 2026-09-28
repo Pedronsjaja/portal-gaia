@@ -14,6 +14,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%231a8fff'/><stop offset='1' stop-color='%2300e5a0'/></linearGradient></defs><rect width='64' height='64' rx='14' fill='url(%23g)'/><text x='32' y='46' font-family='Arial Black,sans-serif' font-weight='900' font-size='38' fill='white' text-anchor='middle'>G</text></svg>">
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="email-queue.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -665,6 +666,7 @@ body.light input,body.light select,body.light textarea{background:#fff;color:var
         <div class="tab" onclick="filterMembers('estrutura',this)">Estrutura</div>
         <div class="tab" onclick="filterMembers('marketing',this)">Marketing</div>
         <div class="tab" onclick="filterMembers('gestao',this)">Gestão</div>
+        <div class="tab" onclick="filterMembers('geral',this)">Geral</div>
       </div>
       <div id="members-list"></div>
     </div>
@@ -809,6 +811,7 @@ body.light input,body.light select,body.light textarea{background:#fff;color:var
         <option value="marketing">Marketing</option>
         <option value="gestao">Gestão</option>
         <option value="adm">ADM</option>
+        <option value="geral">Geral — área a definir</option>
       </select></div>
       <div class="fg"><label class="lbl">Título do Cargo</label><input type="text" id="mu-role" placeholder="Ex: Desenvolvedor, Técnico..."></div>
     </div>
@@ -955,7 +958,8 @@ body.light input,body.light select,body.light textarea{background:#fff;color:var
           </select>
         </div>
       </div>
-      <label class="chk" style="margin-top:10px;margin-bottom:0"><input type="checkbox" id="cal-email" checked> Enviar e-mail para todos no dia do alerta</label>
+      <label class="chk" style="margin-top:10px;margin-bottom:0"><input type="checkbox" id="cal-email" checked> Enviar e-mail ao cadastrar e no dia do alerta, para a área selecionada</label>
+      <div style="font-size:11px;color:var(--dim);margin-top:6px">Os lembretes são verificados enquanto um administrador está com o portal aberto.</div>
     </div>
     <div class="modal-ft"><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-cal')">Cancelar</button><button class="btn btn-green btn-sm" onclick="saveCalEvent()">Adicionar</button></div>
   </div>
@@ -1135,7 +1139,7 @@ DB.on('value', snap => {
 });
 
 function save() {
-  DB.set({members:M, tasks:T, submissions:S, rewards:R, memberPoints:MP, attendance:ATT,
+  return DB.update({members:M, tasks:T, submissions:S, rewards:R, memberPoints:MP, attendance:ATT,
     notices:NOT, calEvents:CAL, emailConfig:ECFG, hoursGoal:HG, hoursLog:HL});
 }
 
@@ -1160,7 +1164,10 @@ const dateAddDays = (dateStr, days) => {
   d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 };
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = () => {
+  const date=new Date();
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+};
 
 // ── CARGO HELPERS (novo sistema) ──
 const CARGO_MAP = {
@@ -1175,6 +1182,10 @@ const CARGO_MAP = {
   robotica:    { label:'Robótica',    color:'#1a8fff', tagClass:'tag-prog' },
   geral:       { label:'Geral',       color:'#e2e8f0', tagClass:'tag-estru' },
 };
+// Keep notification recipients aligned with the current member areas.
+['no-team','cal-alert-team'].forEach(id=>{
+  el(id).innerHTML='<option value="all">Toda a equipe</option>'+Object.entries(CARGO_MAP).map(([value,cargo])=>`<option value="${value}">${cargo.label}</option>`).join('');
+});
 function cargoLabel(team) { return (CARGO_MAP[team]||{label:team}).label; }
 function cargoColor(team) { return (CARGO_MAP[team]||{color:'#5a6a80'}).color; }
 function cargoTagClass(team) { return (CARGO_MAP[team]||{tagClass:''}).tagClass; }
@@ -1216,27 +1227,18 @@ function getAlertEvents() {
   });
 }
 
-function checkAndFireAlerts() {
-  const alerts = getAlertEvents().filter(ev => !dismissedAlerts.has(ev.id));
-  if (!alerts.length) return;
-  alerts.forEach(ev => { toast(`⏰ Amanhã: "${ev.title}"`, 'warn'); });
-  if (ECFG.configured) {
-    alerts.forEach(ev => {
-      const targets = M.filter(m => {
-        if (!m.email || !m.email.trim()) return false;
-        if (!ev.alertTeam || ev.alertTeam === 'all') return true;
-        return m.team === ev.alertTeam;
-      });
-      targets.forEach(m => {
-        const daysLabel = ev.alertDays === 1 ? 'amanhã' : `em ${ev.alertDays} dias`;
-        emailjs.send(ECFG.serviceId, ECFG.templateId, {
-          to_email: m.email, to_name: m.name.split(' ')[0],
-          notice_title: `⏰ Lembrete: "${ev.title}" — ${daysLabel}`,
-          notice_body: `Lembrete automático do Portal Gaia.\n\n📅 Evento: ${ev.title}\n🗓 Data: ${fmtDate(ev.date)}${ev.time ? ' às ' + ev.time : ''}\n${ev.desc ? '\n📝 ' + ev.desc : ''}`,
-          notice_type: 'ALERTA DE EVENTO', portal_name: 'Portal Gaia · UFTM'
-        }, ECFG.publicKey).catch(() => {});
-      });
-    });
+async function checkAndFireAlerts() {
+  const alerts=getAlertEvents();
+  alerts.filter(ev=>!dismissedAlerts.has(ev.id)).forEach(ev=>{
+    toast('⏰ '+ev.title+' — '+fmtDate(ev.date),'warn');dismissedAlerts.add(ev.id);
+  });
+  if(!CU?.isAdmin||!emailConfigured())return;
+  for(const ev of alerts.filter(ev=>ev.emailEnabled!==false)){
+    await sendEmails(M.filter(m=>!ev.alertTeam||ev.alertTeam==='all'||m.team===ev.alertTeam),{
+      notice_title:'⏰ Lembrete: '+ev.title,
+      notice_body:'Evento: '+ev.title+'\nData: '+fmtDate(ev.date)+(ev.time?' às '+ev.time:'')+'\n'+(ev.desc||''),
+      notice_type:'ALERTA DE EVENTO'
+    },'event-'+ev.id+'-'+ev.date+'-'+ev.alertDays);
   }
 }
 
@@ -1390,10 +1392,10 @@ function renderHome() {
     <div class="card card-sm"><div class="cl">Horas Certificado</div><div class="cv cv-sm" style="color:#bb86fc">${totalH}h</div></div>`;
 
   // Agrupamento por cargo
-  const CARGO_ORDER = ['adm','gestao','programacao','eletronica','estrutura','marketing'];
+  const CARGO_ORDER = ['adm','gestao','programacao','eletronica','estrutura','marketing','geral'];
   const CARGO_LABELS = {
     adm:'👑 ADM', gestao:'📋 Gestão', programacao:'💻 Programação',
-    eletronica:'⚡ Eletrônica', estrutura:'🔩 Estrutura', marketing:'📣 Marketing'
+    eletronica:'⚡ Eletrônica', estrutura:'🔩 Estrutura', marketing:'📣 Marketing', geral:'👥 Geral — área a definir'
   };
 
   function memberRow(m) {
@@ -1450,26 +1452,32 @@ function renderNotices() {
       <div class="notice-title">${n.title}</div>
       <div class="notice-body">${n.body}</div>
       <div class="notice-foot">
-        <div><div class="notice-meta">Por ${n.author} · ${fmtDate(n.date)}</div>${n.emailSent?`<div style="font-size:10px;color:var(--green);margin-top:2px">✉ E-mail enviado</div>`:''}</div>
+        <div><div class="notice-meta">Por ${n.author} · ${fmtDate(n.date)}</div>${n.emailReport?`<div style="font-size:10px;color:var(--dim);margin-top:2px">✉ ${n.emailReport.sent+n.emailReport.alreadySent} aceitos pelo serviço · ${n.emailReport.failed} falhas · ${n.emailReport.missing} sem e-mail válido</div>`:n.emailSent?'✉ Envio registrado anteriormente':''}</div>
         ${CU.isAdmin?`<span style="font-size:11px;color:var(--red);cursor:pointer;opacity:.6" onclick="deleteNotice('${n.id}')">🗑 Excluir</span>`:''}
       </div>
     </div>`).join('');
 }
-function publishNotice() {
-  const title=el('no-title').value.trim(), body=el('no-body').value.trim();
+async function publishNotice() {
+  const title=el('no-title').value.trim(),body=el('no-body').value.trim();
   if(!title||!body){toast('Preencha título e mensagem','err');return;}
-  const team=el('no-team').value;
-  const n={id:'n'+Date.now(),title,body,type:el('no-type').value,team,author:CU.name,date:new Date().toISOString().split('T')[0],emailSent:false};
-  if(el('no-email').checked&&ECFG.configured){
-    M.filter(m=>(team==='all'||m.team===team)&&m.email).forEach(m=>{
-      emailjs.send(ECFG.serviceId,ECFG.templateId,{to_email:m.email,to_name:m.name,notice_title:title,notice_body:body,notice_type:n.type,portal_name:'Portal Gaia · UFTM'},ECFG.publicKey).catch(()=>{});
-    });
-    n.emailSent=true;
-  }
+  const team=el('no-team').value,shouldEmail=el('no-email').checked;
+  const n={id:'n'+Date.now(),title,body,type:el('no-type').value,team,author:CU.name,date:todayStr(),emailSent:false};
   NOT.push(n);
-  ['no-title','no-body'].forEach(i=>el(i).value='');
-  closeModal('modal-notice'); save(); toast('Aviso publicado!');
+  ['no-title','no-body'].forEach(i=>el(i).value='');closeModal('modal-notice');
+  try{await save();}catch(error){toast('Não foi possível salvar o aviso.','err');return;}
+  toast('Aviso publicado!');
+  if(shouldEmail){
+    const report=await sendEmails(M.filter(m=>team==='all'||m.team===team),{notice_title:title,notice_body:body,notice_type:n.type},'notice-'+n.id);
+    const index=NOT.findIndex(item=>item.id===n.id);
+    if(index>=0){
+      const emailSent=report.sent+report.alreadySent>0&&!report.failed&&!report.missing;
+      NOT[index].emailSent=emailSent;NOT[index].emailReport=report;
+      await DB.child('notices/'+index).update({emailSent,emailReport:report}).catch(()=>toast('Não foi possível salvar o resultado dos e-mails.','err'));
+      renderCurrentPage();
+    }
+  }
 }
+
 function deleteNotice(id){ if(!confirm('Excluir aviso?'))return; NOT=NOT.filter(n=>n.id!==id); save(); toast('Excluído.'); }
 
 // ══════════════════════════════════════════════════════
@@ -1527,25 +1535,23 @@ function renderUpcoming() {
     </div>`;
   }).join(''):`<div class="empty"><div class="empty-ico">📅</div>Nenhum evento futuro.</div>`;
 }
-function saveCalEvent() {
+async function saveCalEvent() {
   const title=el('cal-title').value.trim(), date=el('cal-date').value;
   if(!title||!date){toast('Preencha título e data','err');return;}
   const time=el('cal-time')?el('cal-time').value:'';
   const alertDays=parseInt(el('cal-alert-days').value)||0;
   const alertTeam=el('cal-alert-team').value;
   const desc=el('cal-desc').value.trim();
-  const ev={id:'e'+Date.now(),title,date,time,type:el('cal-type').value,desc,createdBy:CU.name,alertDays,alertTeam};
-  if(el('cal-email').checked&&ECFG.configured){
-    M.filter(m=>m.email&&m.email.trim()&&(!alertTeam||alertTeam==='all'||m.team===alertTeam)).forEach(m=>{
-      emailjs.send(ECFG.serviceId,ECFG.templateId,{to_email:m.email,to_name:m.name.split(' ')[0],
-        notice_title:`📅 ${title}`,notice_body:`${desc||'Novo evento agendado.'}${alertDays?`\n\n⏰ Lembrete ${alertDays}d antes.`:''}`,
-        notice_type:'CALENDÁRIO',portal_name:'Portal Gaia · UFTM'},ECFG.publicKey).catch(()=>{});
-    });
-  }
+  const ev={id:'e'+Date.now(),title,date,time,type:el('cal-type').value,desc,createdBy:CU.name,alertDays,alertTeam,emailEnabled:el('cal-email').checked};
   CAL.push(ev);
   ['cal-title','cal-desc'].forEach(i=>el(i).value='');
   if(el('cal-time'))el('cal-time').value='';
-  closeModal('modal-cal'); save(); toast(`Evento adicionado!`);
+  closeModal('modal-cal');
+  try{await save();}catch(error){toast('Não foi possível salvar o evento.','err');return;}
+  toast('Evento adicionado!');
+  if(ev.emailEnabled)await sendEmails(M.filter(m=>!alertTeam||alertTeam==='all'||m.team===alertTeam),{
+    notice_title:'📅 '+title,notice_body:'Data: '+fmtDate(date)+(time?' às '+time:'')+'\n\n'+(desc||'Novo evento agendado.'),notice_type:'CALENDÁRIO'
+  });
 }
 function deleteCalEvent(id){ if(!confirm('Remover evento?'))return; CAL=CAL.filter(e=>e.id!==id); save(); }
 
@@ -1959,6 +1965,10 @@ function saveUser(){
   const uid=el('mu-id').value, name=el('mu-name').value.trim();
   const username=el('mu-username').value.trim(), pass=el('mu-pass').value.trim();
   if(!name||!username||!pass){toast('Preencha nome, usuário e senha','err');return;}
+  const email=GaiaEmail.normalizeEmail(el('mu-email').value);
+  if(email&&!GaiaEmail.validEmail(email)){toast('Informe um e-mail válido ou deixe em branco.','err');return;}
+  if(M.some(m=>m.id!==uid&&m.username.trim().toLowerCase()===username.toLowerCase())){toast('Esse usuário já está cadastrado.','err');return;}
+  el('mu-email').value=email;
   if(uid){
     const m=M.find(x=>x.id===uid); if(!m)return;
     m.name=name; m.username=username; m.password=pass; m.email=el('mu-email').value.trim();
@@ -2151,14 +2161,14 @@ function reviewSub(id, action){
     if(m){
       m.hours=(m.hours||0)+(s.hours||0);
       HL.push({memberId:s.memberId,memberName:m.name,op:'add',delta:s.hours||0,reason:`Tarefa aprovada: ${s.taskTitle}`,date:s.reviewDate,by:CU.name});
-      if(ECFG.configured&&m.email){
-        emailjs.send(ECFG.serviceId,ECFG.templateId,{to_email:m.email,to_name:m.name.split(' ')[0],notice_title:`Tarefa Aprovada! 🎉`,notice_body:`Sua entrega "${s.taskTitle}" foi aprovada! +${s.pts}pts e +${s.hours||0}h.${fb?'\n\nObs: '+fb:''}`,notice_type:'PONTUAÇÃO',portal_name:'Portal Gaia · UFTM'},ECFG.publicKey).catch(()=>{});
+      if(m){
+        void sendEmails([m],{notice_title:`Tarefa Aprovada! 🎉`,notice_body:`Sua entrega "${s.taskTitle}" foi aprovada! +${s.pts}pts e +${s.hours||0}h.${fb?'\n\nObs: '+fb:''}`,notice_type:'PONTUAÇÃO',portal_name:'Portal Gaia · UFTM'});
       }
     }
     toast(`Aprovado! +${s.pts}pts para ${s.memberName}`);
   } else {
-    if(m&&ECFG.configured&&m.email){
-      emailjs.send(ECFG.serviceId,ECFG.templateId,{to_email:m.email,to_name:m.name.split(' ')[0],notice_title:`Tarefa Devolvida ⚠️`,notice_body:`Sua entrega "${s.taskTitle}" foi devolvida.${fb?'\n\nMotivo: '+fb:''}`,notice_type:'REVISÃO',portal_name:'Portal Gaia · UFTM'},ECFG.publicKey).catch(()=>{});
+    if(m){
+      void sendEmails([m],{notice_title:`Tarefa Devolvida ⚠️`,notice_body:`Sua entrega "${s.taskTitle}" foi devolvida.${fb?'\n\nMotivo: '+fb:''}`,notice_type:'REVISÃO',portal_name:'Portal Gaia · UFTM'});
     }
     toast('Reprovado.');
   }
@@ -2183,13 +2193,79 @@ function deleteReward(id){if(!confirm('Excluir?'))return;R=R.filter(r=>r.id!==id
 // ══════════════════════════════════════════════════════
 // EMAIL CONFIG
 // ══════════════════════════════════════════════════════
+// All email entry points share the same queue and expose delivery failures.
+const emailQueue = GaiaEmail.createQueue({send: async (config, params) => {
+  if(typeof emailjs === 'undefined') throw new Error('EmailJS não carregou. Verifique a conexão e recarregue.');
+  const deliver = async () => {
+    // Web Locks also serialize sends from other tabs on this origin.
+    await new Promise(resolve=>setTimeout(resolve,1200));
+    return emailjs.send(config.serviceId,config.templateId,params,config.publicKey);
+  };
+  return navigator.locks ? navigator.locks.request('gaia-email-send',deliver) : deliver();
+}});
+let emailReports=[];
+function emailConfigured(){return !!(ECFG.serviceId&&ECFG.templateId&&ECFG.publicKey);}
+window.addEventListener('beforeunload',event=>{
+  if(emailQueue.pending){event.preventDefault();event.returnValue='';}
+});
+async function sendEmails(recipients, params, deliveryKey='') {
+  const config={...ECFG};
+  const report={title:params.notice_title,sent:0,failed:0,missing:0,duplicate:0,alreadySent:0,details:[]};
+  const seen=new Set();
+  for(const member of recipients.map(m=>({...m}))) {
+    const address=GaiaEmail.normalizeEmail(member.email);
+    if(!GaiaEmail.validEmail(address)){
+      report.missing++;report.details.push(`${member.name}: e-mail ausente ou inválido.`);continue;
+    }
+    if(seen.has(address)){report.duplicate++;continue;}
+    seen.add(address);
+    let receipt=null, claimed=false, accepted=false;
+    try {
+      if(!config.serviceId||!config.templateId||!config.publicKey) throw new Error('Configure o EmailJS em Config. E-mail.');
+      if(deliveryKey){
+        const addressKey=Array.from(address).map(c=>c.codePointAt(0).toString(16)).join('-');
+        receipt=firebase.database().ref('gaia_email_deliveries/'+deliveryKey+'/'+addressKey);
+        const reservation=await receipt.transaction(current=>{
+          if(current&&(current.status==='sent'||current.status==='sending'))return;
+          return {status:'sending',startedAt:Date.now()};
+        });
+        if(!reservation.committed){
+          if(reservation.snapshot.val()?.status==='sent'){report.alreadySent++;continue;}
+          throw new Error('Envio já iniciado em outra sessão. Confira o histórico no EmailJS antes de reenviar.');
+        }
+        claimed=true;
+      }
+      await emailQueue.enqueue(config,{...params,to_email:address,to_name:member.name,portal_name:'Portal Gaia · UFTM'});
+      accepted=true;report.sent++;
+      if(receipt)await receipt.set({status:'sent',sentAt:Date.now()});
+    } catch(error) {
+      if(accepted){
+        report.details.push(`${member.name}: aceito pelo serviço, mas não foi possível registrar o envio.`);
+      }else{
+        report.failed++;
+        const reason=String(error.text||error.message||'Falha de conexão com o serviço.');
+        report.details.push(`${member.name}: ${reason}`);
+        if(receipt&&claimed)await receipt.set({status:'failed',failedAt:Date.now()}).catch(()=>{});
+      }
+    }
+  }
+  emailReports.unshift(report);emailReports=emailReports.slice(0,10);
+  toast(`E-mails: ${report.sent} aceitos pelo serviço, ${report.failed} falhas, ${report.missing} sem endereço válido${report.alreadySent?`, ${report.alreadySent} já enviados`:''}.`,report.failed||report.missing?'warn':'ok');
+  renderEmailReports();
+  return report;
+}
+function renderEmailReports(){
+  const box=el('email-reports');if(!box)return;
+  box.innerHTML=emailReports.map(r=>`<div class="card" style="margin-top:10px"><b>${esc(r.title)}</b><div>${r.sent} aceitos pelo serviço · ${r.failed} falhas · ${r.missing} sem e-mail válido · ${r.alreadySent} já enviados · ${r.duplicate} endereços repetidos</div>${r.details.length?`<details><summary>Ver pendências</summary>${r.details.map(esc).join('<br>')}</details>`:''}</div>`).join('');
+}
+
 function renderEmailCfg(){
   el('emailcfg-content').innerHTML=`
     <div style="background:rgba(26,143,255,.04);border:1px solid rgba(26,143,255,.14);border-radius:var(--r);padding:14px;margin-bottom:18px;font-size:12px;color:var(--dim);line-height:1.6">
       <b style="color:var(--accent)">Como configurar:</b><br>
-      1. Acesse <b>emailjs.com</b> → crie conta gratuita (200 emails/mês)<br>
+      1. Acesse <b>emailjs.com</b> → crie sua conta e confira a cota de envios do seu plano<br>
       2. <b>Email Services</b> → conecte Gmail → copie o <b>Service ID</b><br>
-      3. <b>Email Templates</b> → crie template com <code>{{to_email}}</code>, <code>{{to_name}}</code>, <code>{{notice_title}}</code>, <code>{{notice_body}}</code> → copie o <b>Template ID</b><br>
+      3. <b>Email Templates</b> → configure <b>To Email</b> como <code>{{to_email}}</code> (sem destinatário fixo), <b>Subject</b> como <code>{{notice_title}}</code> e o corpo com <code>{{to_name}}</code> e <code>{{notice_body}}</code> → copie o <b>Template ID</b><br>
       4. <b>Account → API Keys</b> → copie a <b>Public Key</b>
     </div>
     <div class="card" style="max-width:500px">
@@ -2202,14 +2278,21 @@ function renderEmailCfg(){
         ${ECFG.configured?`<span style="font-size:12px;color:var(--green);padding:7px 0">✓ Configurado</span>`:''}
       </div>
     </div>
-    <div style="margin-top:22px"><div class="sec-title" style="margin-bottom:11px">E-mails dos membros</div>
-      <div class="grid g2">${M.map(m=>`<div style="display:flex;align-items:center;gap:9px;padding:9px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)"><div class="av" style="width:26px;height:26px">${avImg(m.name,m.color,26)}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500">${m.name}</div><div style="font-size:11px;color:${m.email?'var(--green)':'var(--red)'}">${m.email||'⚠ Sem e-mail'}</div></div><button class="btn btn-ghost btn-sm" style="flex-shrink:0;padding:4px 9px;font-size:10px" onclick="openEditUser('${m.id}')">Editar</button></div>`).join('')}</div>
+    <div style="margin-top:22px"><div class="sec-title" style="margin-bottom:11px">E-mails dos membros</div><p style="font-size:12px;color:var(--dim)">${M.filter(m=>GaiaEmail.validEmail(m.email)).length} de ${M.length} membros com e-mail válido. Preencha os pendentes para que todos possam receber. Os envios são individuais; mantenha esta aba aberta até terminar. O aceite do serviço não confirma a chegada à caixa de entrada.</p><div id="email-reports"></div>
+      <div class="grid g2">${M.map(m=>`<div style="display:flex;align-items:center;gap:9px;padding:9px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r)"><div class="av" style="width:26px;height:26px">${avImg(m.name,m.color,26)}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500">${m.name}</div><div style="font-size:11px;color:${GaiaEmail.validEmail(m.email)?'var(--green)':'var(--red)'}">${esc(m.email)||'⚠ Sem e-mail'}${m.email&&!GaiaEmail.validEmail(m.email)?' — inválido':''}</div></div><button class="btn btn-ghost btn-sm" style="flex-shrink:0;padding:4px 9px;font-size:10px" onclick="openEditUser('${m.id}')">Editar</button></div>`).join('')}</div>
     </div>`;
+  renderEmailReports();
 }
-function saveEmailCfg(){ECFG.serviceId=el('cfg-svc').value.trim();ECFG.templateId=el('cfg-tpl').value.trim();ECFG.publicKey=el('cfg-key').value.trim();ECFG.configured=!!(ECFG.serviceId&&ECFG.templateId&&ECFG.publicKey);if(ECFG.configured)emailjs.init(ECFG.publicKey);save();toast(ECFG.configured?'E-mail configurado! ✓':'Preencha todos os campos','err'.slice(0,ECFG.configured?-3:0)||'ok');}
-function testEmail(){const m=M.find(x=>x.id===CU.id);if(!m||!m.email){toast('Cadastre seu e-mail primeiro','err');return;}if(!ECFG.configured){toast('Configure o EmailJS primeiro','err');return;}emailjs.send(ECFG.serviceId,ECFG.templateId,{to_email:m.email,to_name:m.name,notice_title:'🧪 Teste — Portal Gaia',notice_body:'Se recebeu este e-mail, o EmailJS está funcionando!',notice_type:'Teste',portal_name:'Portal Gaia · UFTM'},ECFG.publicKey).then(()=>toast('E-mail enviado!')).catch(()=>toast('Erro ao enviar','err'));}
-
-setTimeout(()=>{ if(ECFG&&ECFG.publicKey&&ECFG.configured)emailjs.init(ECFG.publicKey); },1500);
+function saveEmailCfg(){
+  ECFG={serviceId:el('cfg-svc').value.trim(),templateId:el('cfg-tpl').value.trim(),publicKey:el('cfg-key').value.trim()};
+  ECFG.configured=emailConfigured();
+  save().then(()=>toast(ECFG.configured?'Configuração salva. Use Testar envio para verificar.':'Preencha todos os campos.',ECFG.configured?'ok':'err')).catch(()=>toast('Erro ao salvar a configuração.','err'));
+}
+async function testEmail(){
+  const member=M.find(m=>m.id===CU.id);
+  if(!member)return;
+  await sendEmails([member],{notice_title:'🧪 Teste — Portal Gaia',notice_body:'Se recebeu este e-mail, o envio está funcionando!',notice_type:'Teste'});
+}
 
 // ══════════════════════════════════════════════════════
 // TEMA
