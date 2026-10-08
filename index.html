@@ -1555,7 +1555,7 @@ async function saveCalEvent() {
   closeModal('modal-cal');
   try{await save();}catch(error){toast('Não foi possível salvar o evento.','err');return;}
   toast('Evento adicionado!');
-  if(ev.emailEnabled)await sendEmails(M.filter(m=>!alertTeam||alertTeam==='all'||m.team===alertTeam),{
+  if(ev.emailEnabled)await sendEmails(M.filter(m=>GaiaNoticeMail.matches(m,alertTeam||'all')),{
     notice_title:'📅 '+title,notice_body:'Data: '+fmtDate(date)+(time?' às '+time:'')+'\n\n'+(desc||'Novo evento agendado.'),notice_type:'CALENDÁRIO'
   });
 }
