@@ -1,4 +1,40 @@
-# Portal Gaia
+<div align="center">
+
+<h1>🌐 Portal Gaia</h1>
+<p><strong>Organiza&#231;&#227;o da equipe: membros, tarefas, presen&#231;a, avisos e calend&#225;rio.</strong></p>
+<p><kbd>HTML &#183; JavaScript &#183; Firebase &#183; EmailJS</kbd></p>
+
+<p><a href="https://github.com/Pedronsjaja/portal-gaia/stargazers"><img alt="Estrelas no GitHub" src="https://img.shields.io/github/stars/Pedronsjaja/portal-gaia?style=flat-square&amp;color=147d68"/></a> <a href="https://github.com/Pedronsjaja/portal-gaia/commits/main"><img alt="Último commit" src="https://img.shields.io/github/last-commit/Pedronsjaja/portal-gaia?style=flat-square&amp;color=235789"/></a></p>
+<p><a href="#inicio-rapido">Comece aqui</a> · <a href="#guia-do-projeto">Documentação</a> · <a href="https://github.com/Pedronsjaja/portal-gaia/tree/main">Arquivos</a></p>
+
+</div>
+
+<a id="inicio-rapido"></a>
+## 🚀 Comece aqui
+
+**[Consultar alterações e limitações](ALTERACOES.md)**
+
+> Esta é uma cópia de desenvolvimento com histórico. Créditos, autoria e instruções do projeto original estão preservados na documentação abaixo.
+
+| Gestão | Comunicação | Manutenção |
+| --- | --- | --- |
+| Membros, tarefas, horas e calendário da equipe. | Avisos e notificações integrados aos serviços do projeto. | Histórico e testes de e-mail e interface preservados. |
+
+### Caminho do projeto
+
+```mermaid
+flowchart LR
+  N0["Consultar documentação"]
+  N1["Preparar ambiente"]
+  N0 --> N1
+  N2["Executar testes simulados"]
+  N1 --> N2
+  N3["Revisar alterações"]
+  N2 --> N3
+```
+
+<a id="guia-do-projeto"></a>
+## 📖 Documentação
 
 Portal da equipe GAIA para gestão de membros, tarefas, presença, horas, avisos e calendário, integrado ao Firebase e ao EmailJS.
 
@@ -38,3 +74,4 @@ Publique `index.html`, `email-queue.js` e `og-image.png` na mesma pasta. Enviar 
 Configure o destinatário do template EmailJS como `{{to_email}}`, o assunto como `{{notice_title}}` e o corpo com `{{to_name}}` e `{{notice_body}}`. Cadastre os endereços dos membros pendentes em **Config. E-mail**.
 
 Consulte [ALTERACOES.md](ALTERACOES.md) para os resultados dos testes e as limitações dos lembretes.
+
