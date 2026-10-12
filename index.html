@@ -552,6 +552,12 @@ body.light input,body.light select,body.light textarea{background:#fff;color:var
     <!-- HOME -->
     <div id="pg-home" class="pg">
       <div class="ph"><div class="pt">Visão Geral</div><div class="ps">Acompanhe o projeto Gaia</div></div>
+      <aside class="alert-banner" role="status" id="alert-spam-fix-notice">
+        <div class="alert-banner-body">
+          <div class="alert-banner-title">Correção dos alertas repetidos — 12/10/2026</div>
+          <div class="alert-banner-sub">Desculpem pelos e-mails repetidos. Removemos o disparo automático de lembretes por e-mail ao entrar no portal e a cada hora. Os lembretes continuam aqui no portal. E-mails de eventos agora dependem de uma ação explícita do administrador. Feche ou atualize outras abas antigas do portal para aplicar a correção.</div>
+        </div>
+      </aside>
       <div id="home-alert-banner"></div>
       <div class="grid g4" style="margin-bottom:18px" id="home-stats"></div>
       <div id="team-columns" style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-start"></div>
@@ -958,7 +964,7 @@ body.light input,body.light select,body.light textarea{background:#fff;color:var
           </select>
         </div>
       </div>
-      <label class="chk" style="margin-top:10px;margin-bottom:0"><input type="checkbox" id="cal-email" checked> Enviar e-mail ao cadastrar e no dia do alerta, para a área selecionada</label>
+      <label class="chk" style="margin-top:10px;margin-bottom:0"><input type="checkbox" id="cal-email"> Enviar um e-mail agora ao criar o evento, para a área selecionada (opcional)</label>
       <div style="font-size:11px;color:var(--dim);margin-top:6px">Os lembretes são verificados enquanto um administrador está com o portal aberto.</div>
     </div>
     <div class="modal-ft"><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-cal')">Cancelar</button><button class="btn btn-green btn-sm" onclick="saveCalEvent()">Adicionar</button></div>
@@ -1227,18 +1233,14 @@ function getAlertEvents() {
   });
 }
 
-async function checkAndFireAlerts() {
-  const alerts=getAlertEvents();
-  alerts.filter(ev=>!dismissedAlerts.has(ev.id)).forEach(ev=>{
-    toast('⏰ '+ev.title+' — '+fmtDate(ev.date),'warn');dismissedAlerts.add(ev.id);
-  });
-  if(!CU?.isAdmin||!emailConfigured())return;
-  for(const ev of alerts.filter(ev=>ev.emailEnabled!==false)){
-    await sendEmails(M.filter(m=>!ev.alertTeam||ev.alertTeam==='all'||m.team===ev.alertTeam),{
-      notice_title:'⏰ Lembrete: '+ev.title,
-      notice_body:'Evento: '+ev.title+'\nData: '+fmtDate(ev.date)+(ev.time?' às '+ev.time:'')+'\n'+(ev.desc||''),
-      notice_type:'ALERTA DE EVENTO'
-    },'event-'+ev.id+'-'+ev.date+'-'+ev.alertDays);
+function checkAndFireAlerts() {
+  // Browser sessions must never broadcast scheduled email. Multiple users,
+  // tabs and hourly timers used to resend the same reminder to everyone.
+  for (const ev of getAlertEvents()) {
+    const key = 'reminder:' + ev.id + ':' + ev.date + ':' + ev.alertDays;
+    if (dismissedAlerts.has(key)) continue;
+    dismissedAlerts.add(key);
+    toast('⏰ ' + ev.title + ' — ' + fmtDate(ev.date), 'warn');
   }
 }
 
