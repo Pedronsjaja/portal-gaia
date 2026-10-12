@@ -75,3 +75,7 @@ Configure o destinatário do template EmailJS como `{{to_email}}`, o assunto com
 
 Consulte [ALTERACOES.md](ALTERACOES.md) para os resultados dos testes e as limitações dos lembretes.
 
+
+## Validacao de engenharia
+
+[Checks offline e limites do backend](docs/engineering-status.md).

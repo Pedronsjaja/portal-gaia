@@ -40,3 +40,14 @@ test('missing configuration, invalid address and ambiguous network failures are 
   await assert.rejects(queue.enqueue(config, {to_email:'x@test.com'}));
   assert.equal(count,1);
 });
+
+test('non-object provider rejection is preserved and later jobs continue',async()=>{
+  for(const failure of [null,undefined,'offline']) {
+    let calls=0;
+    const queue=createQueue({wait:async()=>{},send:async()=>{if(++calls===1)throw failure;return 'ok';}});
+    const results=await Promise.allSettled([queue.enqueue(config,{to_email:'a@test.com'}),queue.enqueue(config,{to_email:'b@test.com'})]);
+    assert.equal(results[0].reason,failure);
+    assert.equal(results[1].value,'ok');
+    assert.equal(calls,2);
+  }
+});
