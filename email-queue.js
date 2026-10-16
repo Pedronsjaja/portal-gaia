@@ -3,6 +3,7 @@
   'use strict';
   const normalizeEmail = value => String(value || '').trim().toLowerCase();
   const validEmail = value => /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(normalizeEmail(value));
+  const isMonthlyQuota = error => /monthly request quota exceeded/i.test(String(error?.text || error?.message || ''));
   function createQueue({send, wait = ms => new Promise(r => setTimeout(r, ms)), now = Date.now, interval = 1200}) {
     let tail = Promise.resolve(), lastStart = -Infinity, pending = 0;
     function enqueue(config, params) {
@@ -17,7 +18,7 @@
           try { return await send(snapshot, payload); }
           catch (error) {
             // Only retry a definite rate-limit refusal, never an ambiguous timeout.
-            if (Number(error?.status) !== 429 || attempt >= 2) throw error;
+            if (isMonthlyQuota(error) || Number(error?.status) !== 429 || attempt >= 2) throw error;
             await wait(2000 * (attempt + 1));
           }
         }
@@ -27,7 +28,7 @@
     }
     return {enqueue, get pending() { return pending; }};
   }
-  const api = {normalizeEmail, validEmail, createQueue};
+  const api = {normalizeEmail, validEmail, isMonthlyQuota, createQueue};
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.GaiaEmail = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -69,6 +69,10 @@ node tests/browser.cjs
 
 ## Publicação e e-mails
 
+Reserva Gmail para recusas por cota EmailJS: [ativação e limitações](docs/gmail-fallback.md).
+O aplicativo Apps Script é privado e exige autorização da conta Gaia; não está
+ativado apenas por publicar este código. Publicar também `notice-mail.js`.
+
 Publique `index.html`, `email-queue.js` e `og-image.png` na mesma pasta. Enviar os arquivos ao GitHub não atualiza automaticamente o site da GaiaRobotca. Esta cópia não habilita GitHub Pages automaticamente.
 
 Configure o destinatário do template EmailJS como `{{to_email}}`, o assunto como `{{notice_title}}` e o corpo com `{{to_name}}` e `{{notice_body}}`. Cadastre os endereços dos membros pendentes em **Config. E-mail**.
